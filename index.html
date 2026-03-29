@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classifica Inscrições</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f0eb;
+    --surface: #ffffff;
+    --primary: #1a5c3a;
+    --primary-light: #e8f3ed;
+    --primary-hover: #14472d;
+    --accent: #c4813c;
+    --accent-light: #fdf3e8;
+    --text: #2c2c2c;
+    --text-muted: #7a7a7a;
+    --border: #e0dbd5;
+    --danger: #c0392b;
+    --danger-light: #fdecea;
+    --radius: 12px;
+    --shadow: 0 2px 16px rgba(0,0,0,0.06);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.10);
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    width: 100%;
+    background: var(--primary);
+    padding: 28px 0;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    top: -40%; right: -10%;
+    width: 300px; height: 300px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 50%;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: -60%; left: -5%;
+    width: 200px; height: 200px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 50%;
+  }
+  header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem;
+    color: #fff;
+    letter-spacing: 0.02em;
+    position: relative; z-index: 1;
+  }
+  header p {
+    color: rgba(255,255,255,0.7);
+    font-size: 0.9rem;
+    margin-top: 6px;
+    position: relative; z-index: 1;
+  }
+
+  main {
+    width: 100%;
+    max-width: 960px;
+    padding: 32px 20px 60px;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    background: var(--surface);
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--primary);
+    background: var(--primary-light);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+  }
+  .drop-zone.drag-over { border-style: solid; }
+  .drop-zone-icon {
+    width: 56px; height: 56px;
+    margin: 0 auto 16px;
+    background: var(--primary-light);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .drop-zone-icon svg { width: 28px; height: 28px; stroke: var(--primary); }
+  .drop-zone h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 6px; }
+  .drop-zone p { color: var(--text-muted); font-size: 0.88rem; }
+  .drop-zone .btn-browse {
+    display: inline-block; margin-top: 16px;
+    padding: 10px 28px; background: var(--primary); color: #fff;
+    border: none; border-radius: 8px;
+    font-family: inherit; font-size: 0.9rem; font-weight: 600;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .drop-zone .btn-browse:hover { background: var(--primary-hover); }
+  #fileInput { display: none; }
+
+  /* File card */
+  .file-card {
+    display: none;
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px 24px;
+    margin-top: 20px;
+    animation: slideUp 0.35s ease;
+  }
+  .file-card.visible { display: block; }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .file-info { display: flex; align-items: center; gap: 14px; }
+  .file-icon {
+    width: 44px; height: 44px;
+    background: var(--primary-light); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .file-icon svg { width: 22px; height: 22px; stroke: var(--primary); }
+  .file-details { flex: 1; min-width: 0; }
+  .file-name { font-weight: 600; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-meta { color: var(--text-muted); font-size: 0.82rem; margin-top: 2px; }
+  .btn-remove {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); padding: 6px; border-radius: 6px; transition: all 0.2s;
+  }
+  .btn-remove:hover { color: var(--danger); background: var(--danger-light); }
+
+  /* Data table */
+  .table-section {
+    display: none;
+    margin-top: 24px;
+    animation: slideUp 0.35s ease;
+  }
+  .table-section.visible { display: block; }
+
+  .table-section h3 {
+    font-size: 1rem; font-weight: 600; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .table-section h3 .badge {
+    background: var(--primary); color: #fff;
+    font-size: 0.75rem; padding: 2px 10px; border-radius: 20px; font-weight: 600;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  thead th {
+    background: var(--primary);
+    color: #fff;
+    padding: 12px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    position: sticky; top: 0; z-index: 2;
+  }
+
+  tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  tbody tr:hover { background: var(--primary-light); }
+
+  .row-num {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-align: center;
+    width: 40px;
+  }
+
+  .student-name {
+    font-weight: 500;
+    white-space: nowrap;
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Form inputs in table */
+  table select, table input[type="number"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    background: #fff;
+    transition: border-color 0.2s;
+    min-width: 80px;
+  }
+
+  table select:focus, table input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(26,92,58,0.1);
+  }
+
+  table input.input-error {
+    border-color: var(--danger);
+    background: var(--danger-light);
+  }
+
+  table input[type="number"]::-webkit-inner-spin-button { opacity: 1; }
+
+  /* Buttons */
+  .btn-action {
+    width: 100%;
+    padding: 14px 24px;
+    border: none;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.25s ease;
+    margin-top: 20px;
+  }
+
+  .btn-action svg { width: 20px; height: 20px; }
+
+  .btn-action.btn-include {
+    background: var(--primary);
+    color: #fff;
+  }
+  .btn-action.btn-include:hover:not(:disabled) {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(26,92,58,0.3);
+  }
+
+  .btn-action.btn-classify {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-action.btn-classify:hover:not(:disabled) {
+    background: #a96d2f;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(196,129,60,0.3);
+  }
+
+  .btn-action.btn-download {
+    background: var(--primary);
+    color: #fff;
+  }
+  .btn-action.btn-download:hover:not(:disabled) {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(26,92,58,0.3);
+  }
+
+  .btn-action:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  .btn-action.active {
+    opacity: 1;
+    animation: pulse 0.5s ease;
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+  }
+
+  /* Status message */
+  .status-msg {
+    display: none;
+    margin-top: 16px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    animation: slideUp 0.3s ease;
+  }
+  .status-msg.visible { display: flex; align-items: center; gap: 10px; }
+  .status-msg.success { background: var(--primary-light); color: var(--primary); }
+  .status-msg.error { background: var(--danger-light); color: var(--danger); }
+
+  .status-icon {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .status-msg.success .status-icon { background: var(--primary); }
+  .status-msg.error .status-icon { background: var(--danger); }
+  .status-icon svg { width: 14px; height: 14px; stroke: #fff; }
+
+  .spinner {
+    display: inline-block;
+    width: 20px; height: 20px;
+    border: 2.5px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  footer {
+    text-align: center; padding: 20px;
+    color: var(--text-muted); font-size: 0.78rem;
+  }
+
+  @media (max-width: 600px) {
+    header h1 { font-size: 1.5rem; }
+    main { padding: 20px 10px 40px; }
+    .drop-zone { padding: 32px 16px; }
+    .student-name { max-width: 140px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Classifica Inscrições</h1>
+  <p>Complementar dados e classificar alunos por Programa</p>
+</header>
+
+<main>
+  <!-- Drop Zone -->
+  <div class="drop-zone" id="dropZone">
+    <div class="drop-zone-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    </div>
+    <h2>Arraste o arquivo Excel aqui</h2>
+    <p>Arquivo gerado pelo app "Separa Inscrições" (.xlsx)</p>
+    <button class="btn-browse" onclick="document.getElementById('fileInput').click()">Escolher arquivo</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+  </div>
+
+  <!-- File Card -->
+  <div class="file-card" id="fileCard">
+    <div class="file-info">
+      <div class="file-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
+      <div class="file-details">
+        <div class="file-name" id="fileName"></div>
+        <div class="file-meta" id="fileMeta"></div>
+      </div>
+      <button class="btn-remove" onclick="removeFile()" title="Remover arquivo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Table Section -->
+  <div class="table-section" id="tableSection">
+    <h3>Complementar dados dos alunos <span class="badge" id="studentCount"></span></h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Aluno</th>
+            <th>Plano de trabalho adequado?</th>
+            <th>Nº de reprovações</th>
+            <th>Nº de conceitos C</th>
+            <th>Nº de créditos</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Include button -->
+    <button class="btn-action btn-include" id="btnInclude" disabled onclick="includeData()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 5v14"/><path d="M5 12h14"/>
+      </svg>
+      Incluir dados
+    </button>
+
+    <div class="status-msg" id="includeStatus"></div>
+
+    <!-- Classify button -->
+    <button class="btn-action btn-classify" id="btnClassify" disabled onclick="classifyStudents()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="4" y1="6" x2="20" y2="6"/>
+        <line x1="4" y1="12" x2="16" y2="12"/>
+        <line x1="4" y1="18" x2="12" y2="18"/>
+      </svg>
+      Classificar alunos
+    </button>
+
+    <div class="status-msg" id="classifyStatus"></div>
+
+    <!-- Download button -->
+    <button class="btn-action btn-download" id="btnDownload" disabled onclick="downloadFile()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Baixar arquivo classificado
+    </button>
+  </div>
+</main>
+
+<footer>&copy; 2026 Rodrigo Pereira &mdash; FFCLRP-USP</footer>
+
+<script>
+  let headerRow = [];
+  let dataRows = [];
+  let colIndex = {};
+  let programName = '';
+  let classifiedBlob = null;
+
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+
+  // Drag and drop
+  ['dragenter','dragover'].forEach(evt => {
+    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  });
+  ['dragleave','drop'].forEach(evt => {
+    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.remove('drag-over'); });
+  });
+  dropZone.addEventListener('drop', e => {
+    if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+  });
+  dropZone.addEventListener('click', e => {
+    if (e.target.tagName !== 'BUTTON') fileInput.click();
+  });
+  fileInput.addEventListener('change', e => {
+    if (e.target.files.length > 0) handleFile(e.target.files[0]);
+  });
+
+  function handleFile(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['xlsx','xls'].includes(ext)) {
+      alert('Por favor, selecione um arquivo Excel (.xlsx ou .xls).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array', cellDates: true });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+
+        if (json.length < 2) { alert('A planilha parece estar vazia.'); return; }
+
+        headerRow = json[0];
+        dataRows = json.slice(1).filter(r => r.some(c => c !== ''));
+
+        // Build column index
+        colIndex = {};
+        headerRow.forEach((h, i) => { colIndex[h] = i; });
+
+        const requiredCols = ['Aluno', 'Programa', 'NUSP aluno', 'Curso ME/DO', 'É Bolsista?',
+          'Participações como bolsista PAE', 'Participações como voluntário PAE',
+          'Status', 'Data inicial de matrícula', 'Agência'];
+        const missing = requiredCols.filter(c => colIndex[c] === undefined);
+        if (missing.length > 0) {
+          alert('Colunas não encontradas:\n' + missing.join('\n'));
+          return;
+        }
+
+        programName = (dataRows[0][colIndex['Programa']] || '').toString().trim();
+
+        // UI updates
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileMeta').textContent =
+          `${dataRows.length} aluno(s) · Programa: ${programName}`;
+        document.getElementById('fileCard').classList.add('visible');
+        dropZone.style.display = 'none';
+
+        buildTable();
+
+        document.getElementById('tableSection').classList.add('visible');
+        document.getElementById('studentCount').textContent = dataRows.length + ' alunos';
+
+        // Reset buttons
+        document.getElementById('btnInclude').disabled = true;
+        document.getElementById('btnClassify').disabled = true;
+        document.getElementById('btnDownload').disabled = true;
+        hideStatus('includeStatus');
+        hideStatus('classifyStatus');
+        classifiedBlob = null;
+
+      } catch (err) {
+        alert('Erro ao ler o arquivo: ' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function buildTable() {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    const alunoIdx = colIndex['Aluno'];
+
+    dataRows.forEach((row, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="row-num">${i + 1}</td>
+        <td class="student-name" title="${row[alunoIdx]}">${row[alunoIdx]}</td>
+        <td>
+          <select data-row="${i}" data-col="plano" onchange="checkAllFilled()">
+            <option value="">Selecione...</option>
+            <option value="Sim">Sim</option>
+            <option value="Não">Não</option>
+          </select>
+        </td>
+        <td>
+          <input type="number" data-row="${i}" data-col="reprovacoes" value="0"
+            min="0" step="1" onchange="validateInt(this); checkAllFilled()"
+            oninput="checkAllFilled()">
+        </td>
+        <td>
+          <input type="number" data-row="${i}" data-col="conceitosC" value="0"
+            min="0" step="1" onchange="validateInt(this); checkAllFilled()"
+            oninput="checkAllFilled()">
+        </td>
+        <td>
+          <input type="number" data-row="${i}" data-col="creditos"
+            min="0" step="1" placeholder="—"
+            onchange="validateInt(this); checkAllFilled()"
+            oninput="checkAllFilled()">
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Initial check
+    setTimeout(checkAllFilled, 100);
+  }
+
+  function validateInt(input) {
+    const val = input.value.trim();
+    if (val === '') {
+      input.classList.remove('input-error');
+      return;
+    }
+    const num = Number(val);
+    if (!Number.isInteger(num) || num < 0) {
+      input.classList.add('input-error');
+      alert('Por favor, insira somente números inteiros não negativos.');
+      input.value = '';
+      input.focus();
+    } else {
+      input.classList.remove('input-error');
+      input.value = num; // normalize
+    }
+  }
+
+  function checkAllFilled() {
+    const selects = document.querySelectorAll('select[data-col="plano"]');
+    const creditos = document.querySelectorAll('input[data-col="creditos"]');
+    const reprovacoes = document.querySelectorAll('input[data-col="reprovacoes"]');
+    const conceitosC = document.querySelectorAll('input[data-col="conceitosC"]');
+
+    let allFilled = true;
+
+    selects.forEach(s => { if (!s.value) allFilled = false; });
+    creditos.forEach(inp => {
+      const v = inp.value.trim();
+      if (v === '' || !Number.isInteger(Number(v)) || Number(v) < 0) allFilled = false;
+    });
+    reprovacoes.forEach(inp => {
+      const v = inp.value.trim();
+      if (v === '' || !Number.isInteger(Number(v)) || Number(v) < 0) allFilled = false;
+    });
+    conceitosC.forEach(inp => {
+      const v = inp.value.trim();
+      if (v === '' || !Number.isInteger(Number(v)) || Number(v) < 0) allFilled = false;
+    });
+
+    const btn = document.getElementById('btnInclude');
+    btn.disabled = !allFilled;
+    if (allFilled) btn.classList.add('active');
+    else btn.classList.remove('active');
+  }
+
+  function includeData() {
+    // Final validation pass
+    const errors = [];
+    const selects = document.querySelectorAll('select[data-col="plano"]');
+    const reprovacoes = document.querySelectorAll('input[data-col="reprovacoes"]');
+    const conceitosC = document.querySelectorAll('input[data-col="conceitosC"]');
+    const creditos = document.querySelectorAll('input[data-col="creditos"]');
+
+    selects.forEach((s, i) => {
+      if (!s.value) errors.push(`Linha ${i+1}: "Plano de trabalho adequado?" não selecionado.`);
+    });
+    [reprovacoes, conceitosC, creditos].forEach((inputs, ci) => {
+      const names = ['Nº de reprovações', 'Nº de conceitos C', 'Nº de créditos'];
+      inputs.forEach((inp, i) => {
+        const v = inp.value.trim();
+        if (v === '') { errors.push(`Linha ${i+1}: "${names[ci]}" está vazio.`); return; }
+        const num = Number(v);
+        if (!Number.isInteger(num) || num < 0) errors.push(`Linha ${i+1}: "${names[ci]}" deve ser inteiro não negativo.`);
+      });
+    });
+
+    if (errors.length > 0) {
+      alert('Corrija os seguintes erros:\n\n' + errors.slice(0, 10).join('\n'));
+      return;
+    }
+
+    // Add new columns to headerRow and dataRows
+    headerRow.push('Plano de trabalho', 'Reprovações', 'Conceitos C', 'Créditos');
+
+    selects.forEach((s, i) => {
+      const rep = parseInt(reprovacoes[i].value);
+      const cc = parseInt(conceitosC[i].value);
+      const cred = parseInt(creditos[i].value);
+      dataRows[i].push(s.value, rep, cc, cred);
+    });
+
+    // Update colIndex
+    colIndex['Plano de trabalho'] = headerRow.indexOf('Plano de trabalho');
+    colIndex['Reprovações'] = headerRow.indexOf('Reprovações');
+    colIndex['Conceitos C'] = headerRow.indexOf('Conceitos C');
+    colIndex['Créditos'] = headerRow.indexOf('Créditos');
+
+    // Show success
+    showStatus('includeStatus', 'success', 'Dados incluídos com sucesso! Agora classifique os alunos.');
+
+    // Disable include, enable classify
+    document.getElementById('btnInclude').disabled = true;
+    document.getElementById('btnInclude').classList.remove('active');
+    document.getElementById('btnClassify').disabled = false;
+    document.getElementById('btnClassify').classList.add('active');
+
+    // Disable all inputs
+    document.querySelectorAll('#tableBody select, #tableBody input').forEach(el => { el.disabled = true; });
+  }
+
+  function classifyStudents() {
+    const btn = document.getElementById('btnClassify');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Classificando...';
+
+    setTimeout(() => {
+      // Sort dataRows according to criteria
+      const ci = colIndex;
+
+      dataRows.sort((a, b) => {
+        // 1. Plano de trabalho - descending (Z-A): "Sim" > "Não" → desc means Sim first
+        const planoA = (a[ci['Plano de trabalho']] || '').toString();
+        const planoB = (b[ci['Plano de trabalho']] || '').toString();
+        let cmp = planoB.localeCompare(planoA, 'pt-BR');
+        if (cmp !== 0) return cmp;
+
+        // 2. Curso ME/DO - ascending (A-Z)
+        const cursoA = (a[ci['Curso ME/DO']] || '').toString();
+        const cursoB = (b[ci['Curso ME/DO']] || '').toString();
+        cmp = cursoA.localeCompare(cursoB, 'pt-BR');
+        if (cmp !== 0) return cmp;
+
+        // 3. É Bolsista? - ascending (A-Z): "Não" < "Sim"
+        const bolA = (a[ci['É Bolsista?']] || '').toString();
+        const bolB = (b[ci['É Bolsista?']] || '').toString();
+        cmp = bolA.localeCompare(bolB, 'pt-BR');
+        if (cmp !== 0) return cmp;
+
+        // 4. Participações como bolsista PAE - ascending
+        const pbA = Number(a[ci['Participações como bolsista PAE']]) || 0;
+        const pbB = Number(b[ci['Participações como bolsista PAE']]) || 0;
+        cmp = pbA - pbB;
+        if (cmp !== 0) return cmp;
+
+        // 5. Participações como voluntário PAE - descending
+        const pvA = Number(a[ci['Participações como voluntário PAE']]) || 0;
+        const pvB = Number(b[ci['Participações como voluntário PAE']]) || 0;
+        cmp = pvB - pvA;
+        if (cmp !== 0) return cmp;
+
+        // 6. Status - ascending (A-Z)
+        const stA = (a[ci['Status']] || '').toString();
+        const stB = (b[ci['Status']] || '').toString();
+        cmp = stA.localeCompare(stB, 'pt-BR');
+        if (cmp !== 0) return cmp;
+
+        // 7. Reprovações - ascending
+        const repA = Number(a[ci['Reprovações']]) || 0;
+        const repB = Number(b[ci['Reprovações']]) || 0;
+        cmp = repA - repB;
+        if (cmp !== 0) return cmp;
+
+        // 8. Conceitos C - ascending
+        const ccA = Number(a[ci['Conceitos C']]) || 0;
+        const ccB = Number(b[ci['Conceitos C']]) || 0;
+        cmp = ccA - ccB;
+        if (cmp !== 0) return cmp;
+
+        // 9. Créditos - descending
+        const crA = Number(a[ci['Créditos']]) || 0;
+        const crB = Number(b[ci['Créditos']]) || 0;
+        cmp = crB - crA;
+        if (cmp !== 0) return cmp;
+
+        // 10. Data inicial de matrícula - ascending
+        const dA = parseDate(a[ci['Data inicial de matrícula']]);
+        const dB = parseDate(b[ci['Data inicial de matrícula']]);
+        cmp = dA - dB;
+        if (cmp !== 0) return cmp;
+
+        // 11. Agência - ascending (A-Z)
+        const agA = (a[ci['Agência']] || '').toString();
+        const agB = (b[ci['Agência']] || '').toString();
+        return agA.localeCompare(agB, 'pt-BR');
+      });
+
+      // Build output sheet
+      const outHeader = [
+        'Classificação', 'Programa', 'Nº USP', 'Nome', 'Plano de trabalho', 'Curso',
+        'Bolsista', 'Participações como bolsista PAE', 'Participações como voluntário PAE',
+        'Disciplina', 'Reprovações', 'Conceitos C', 'Créditos',
+        'Matrícula', 'Agência'
+      ];
+
+      const outRows = dataRows.map((row, i) => [
+        i + 1,
+        row[ci['Programa']] || '',
+        row[ci['NUSP aluno']] || '',
+        row[ci['Aluno']] || '',
+        row[ci['Plano de trabalho']] || '',
+        row[ci['Curso ME/DO']] || '',
+        row[ci['É Bolsista?']] || '',
+        Number(row[ci['Participações como bolsista PAE']]) || 0,
+        Number(row[ci['Participações como voluntário PAE']]) || 0,
+        row[ci['Status']] || '',
+        Number(row[ci['Reprovações']]) || 0,
+        Number(row[ci['Conceitos C']]) || 0,
+        Number(row[ci['Créditos']]) || 0,
+        row[ci['Data inicial de matrícula']] || '',
+        row[ci['Agência']] || ''
+      ]);
+
+      const aoa = [outHeader, ...outRows];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+      // Auto column widths
+      ws['!cols'] = outHeader.map((h, i) => {
+        let max = h.length;
+        outRows.forEach(r => {
+          const len = (r[i] || '').toString().length;
+          if (len > max) max = len;
+        });
+        return { wch: Math.min(max + 3, 45) };
+      });
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Classificação');
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      classifiedBlob = new Blob([wbout], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+
+      // UI updates
+      showStatus('classifyStatus', 'success',
+        `Alunos classificados com sucesso! ${dataRows.length} aluno(s) ordenados.`);
+
+      btn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+          <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="16" y2="12"/><line x1="4" y1="18" x2="12" y2="18"/>
+        </svg>
+        Classificar alunos
+      `;
+      btn.classList.remove('active');
+
+      document.getElementById('btnDownload').disabled = false;
+      document.getElementById('btnDownload').classList.add('active');
+
+      document.getElementById('btnDownload').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 500);
+  }
+
+  function parseDate(val) {
+    if (!val) return 0;
+    if (val instanceof Date) return val.getTime();
+    const str = val.toString().trim();
+    // Try ISO format: 2024-08-08
+    let d = new Date(str);
+    if (!isNaN(d.getTime())) return d.getTime();
+    // Try dd/mm/yyyy
+    const parts = str.split('/');
+    if (parts.length === 3) {
+      d = new Date(parts[2], parts[1] - 1, parts[0]);
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    return 0;
+  }
+
+  function downloadFile() {
+    if (classifiedBlob) {
+      const fname = programName ? programName + ' - Classificação.xlsx' : 'Classificação.xlsx';
+      saveAs(classifiedBlob, fname);
+    }
+  }
+
+  function removeFile() {
+    headerRow = []; dataRows = []; colIndex = {};
+    programName = ''; classifiedBlob = null;
+    document.getElementById('fileCard').classList.remove('visible');
+    document.getElementById('tableSection').classList.remove('visible');
+    dropZone.style.display = '';
+    fileInput.value = '';
+    hideStatus('includeStatus');
+    hideStatus('classifyStatus');
+  }
+
+  function showStatus(id, type, msg) {
+    const el = document.getElementById(id);
+    const iconSvg = type === 'success'
+      ? '<polyline points="20 6 9 17 4 12"/>'
+      : '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>';
+    el.className = `status-msg visible ${type}`;
+    el.innerHTML = `
+      <span class="status-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${iconSvg}</svg>
+      </span>
+      ${msg}
+    `;
+  }
+
+  function hideStatus(id) {
+    const el = document.getElementById(id);
+    el.className = 'status-msg';
+    el.innerHTML = '';
+  }
+</script>
+</body>
+</html>
